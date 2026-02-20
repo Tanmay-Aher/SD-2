@@ -1,58 +1,34 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { Request, Response } from "express";
+import User from "../models/User";
 
-export interface DecodedToken {
-  id: string;
-  email: string;
-  role: 'admin' | 'teacher' | 'student';
-  iat: number;
-  exp: number;
-}
+export const register = async (req: Request, res: Response) => {
+  console.log("REGISTER BODY 👉", req.body);
 
-export interface AuthRequest extends Request {
-  user?: DecodedToken;
-}
+  const { firstName, lastName, email, password } = req.body;
 
-// Middleware to verify JWT token
-export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  try {
-    const token = req.headers.authorization?.split(' ')[1];
-
-    if (!token) {
-      res.status(401).json({ error: 'No token provided' });
-      return;
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as DecodedToken;
-    req.user = decoded;
-    next();
-  } catch (error: any) {
-    res.status(401).json({ error: 'Invalid or expired token' });
+  if (!firstName || !lastName || !email || !password) {
+    return res.status(400).json({ message: "All fields are required" });
   }
-};
 
-// Middleware to check user role
-export const roleMiddleware = (allowedRoles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    if (!req.user) {
-      res.status(401).json({ error: 'Authentication required' });
-      return;
-    }
+  const existingUser = await User.findOne({ email });
+  if (existingUser) {
+    return res.status(400).json({ message: "User already exists" });
+  }
 
-    if (!allowedRoles.includes(req.user.role)) {
-      res.status(403).json({ error: 'Insufficient permissions' });
-      return;
-    }
-
-    next();
-  };
-};
-
-// Middleware for error handling
-export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction): void => {
-  console.error(err.stack);
-  res.status(500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined,
+  const user = await User.create({
+    firstName,
+    lastName,
+    email,
+    password,
   });
+
+  return res.status(201).json({
+    message: "User registered successfully",
+    userId: user._id,
+  });
+};
+
+// OPTIONAL — keep login stub so imports don’t break
+export const login = async (req: Request, res: Response) => {
+  return res.status(200).json({ message: "Login route working" });
 };
