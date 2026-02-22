@@ -3,9 +3,10 @@ dotenv.config();
 
 import express from "express";
 import connectDB from "./config/database";
-
-import authRoutes from "./routes/auth";
-
+import subjectRoutes from "./routes/subject.routes";
+import testRoutes from "./routes/test.routes";
+import authRoutes from "./routes/auth.routes";
+import userRoutes from "./routes/users.routes.js";
 const app = express();
 
 // 🔴 VERY IMPORTANT — body parser MUST be before routes
@@ -14,7 +15,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use("/api/auth", authRoutes);
-
+app.use("/api/users", userRoutes);
+app.use("/api/test", testRoutes);
+app.use("/api/subjects", subjectRoutes);
 // Health check
 app.get("/", (req, res) => {
   res.status(200).json({ message: "EduDash API running 🚀" });
