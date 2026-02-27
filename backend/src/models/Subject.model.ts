@@ -1,29 +1,59 @@
-import { Schema, model, Types } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 
-const subjectSchema = new Schema(
+/* =========================
+   SUBJECT INTERFACE
+========================= */
+export interface ISubject extends Document {
+  code: string;
+  name: string;
+  department: string;
+  semester: number;
+  isActive: boolean;
+  teachers: Types.ObjectId[]; // 🔗 linked teachers
+}
+
+/* =========================
+   SUBJECT SCHEMA
+========================= */
+const subjectSchema = new Schema<ISubject>(
   {
-    name: {
-      type: String,
-      required: true,
-    },
     code: {
       type: String,
       required: true,
       unique: true,
+      uppercase: true,
+      trim: true,
     },
-    teacher: {
-      type: Types.ObjectId,
-      ref: "User",
+    name: {
+      type: String,
       required: true,
+      trim: true,
     },
-    students: [
+    department: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    semester: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 8,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    teachers: [
       {
-        type: Types.ObjectId,
-        ref: "User",
+        type: Schema.Types.ObjectId,
+        ref: "Teacher",
       },
     ],
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-export const Subject = model("Subject", subjectSchema);
+export const Subject = model<ISubject>("Subject", subjectSchema);
