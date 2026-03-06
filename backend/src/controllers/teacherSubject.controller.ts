@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Teacher } from "../models/Teacher.model";
 import { Subject } from "../models/Subject.model";
+import { User } from "../models/User.model";
 
 export const assignSubjectToTeacher = async (
   req: Request,
@@ -36,26 +37,41 @@ export const assignSubjectToTeacher = async (
       return res.status(404).json({ message: "Subject not found" });
     }
 
-    const teacherHasSubject = teacher.subjects.some(
-      (id) => id.toString() === subjectId
-    );
+    // Auto-repair legacy teacher profiles that were created without user linkage.
+    if (!(teacher as any).user) {
+      const linkedUser = await User.findOne({
+        email: teacher.email.trim().toLowerCase(),
+      }).select("_id role");
 
-    if (!teacherHasSubject) {
-      teacher.subjects.push(subject._id);
+      if (!linkedUser) {
+        return res.status(400).json({
+          message:
+            "Teacher profile is missing linked user. Create or link a user account first.",
+        });
+      }
+
+      (teacher as any).user = linkedUser._id;
+      await teacher.save();
+
+      if (linkedUser.role !== "teacher") {
+        linkedUser.role = "teacher";
+        await linkedUser.save();
+      }
     }
 
-    const subjectHasTeacher = subject.teachers.some(
-      (id) => id.toString() === teacherId
+    // Use atomic updates to avoid full-document validation side effects.
+    await Teacher.updateOne(
+      { _id: teacher._id },
+      { $addToSet: { subjects: subject._id } }
+    );
+    await Subject.updateOne(
+      { _id: subject._id },
+      { $addToSet: { teachers: teacher._id } }
     );
 
-    if (!subjectHasTeacher) {
-      subject.teachers.push(teacher._id);
-    }
-
-    await teacher.save();
-    await subject.save();
-
-    const updatedTeacher = await Teacher.findById(teacherId).populate("subjects");
+    const updatedTeacher = await Teacher.findById(teacherId)
+      .populate("subjects")
+      .populate("user", "email role");
 
     return res.status(200).json({
       message: "Subject assigned successfully",

@@ -22,7 +22,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="font-sans antialiased">{children}</body>
+      <body className={`${_inter.variable} ${_jetbrainsMono.variable} min-h-screen bg-background font-sans antialiased`}>
+        {children}
+      </body>
     </html>
   )
 }

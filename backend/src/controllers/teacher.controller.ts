@@ -47,6 +47,12 @@ export const createTeacher = async (req: Request, res: Response) => {
       subjects: [],
     });
 
+    // Keep auth role in sync with teacher profile for role-protected APIs.
+    if (user.role !== "teacher") {
+      user.role = "teacher";
+      await user.save();
+    }
+
     return res.status(201).json({
       message: "Teacher created successfully",
       teacher,

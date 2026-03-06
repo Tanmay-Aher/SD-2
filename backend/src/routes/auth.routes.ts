@@ -3,22 +3,24 @@ import jwt from "jsonwebtoken";
 import { User } from "../models/User.model";
 
 const router = express.Router();
-const JWT_SECRET = "supersecretkey";
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
-router.post("/login", async (req, res) => {
+router.post("/login", async (req, res): Promise<void> => {
   try {
     const { email, password } = req.body;
 
     // find user in DB
     const user = await User.findOne({ email }).select("+password");
     if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      res.status(401).json({ message: "Invalid credentials" });
+      return;
     }
 
     // compare password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      res.status(401).json({ message: "Invalid credentials" });
+      return;
     }
 
     // generate JWT
@@ -38,27 +40,31 @@ router.post("/login", async (req, res) => {
         role: user.role,
       },
     });
+    return;
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
+    return;
   }
 });
 
 // ------------------- SIGNUP ROUTE ------------------
 
-router.post("/signup", async (req, res) => {
+router.post("/signup", async (req, res): Promise<void> => {
   try {
     const { firstName, lastName, email, password, role } = req.body;
 
     // 1. Basic validation
     if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({ message: "All fields are required" });
+      res.status(400).json({ message: "All fields are required" });
+      return;
     }
 
     // 2. Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({ message: "User already exists" });
+      res.status(409).json({ message: "User already exists" });
+      return;
     }
 
     // 3. Create new user
@@ -89,9 +95,11 @@ router.post("/signup", async (req, res) => {
         role: user.role,
       },
     });
+    return;
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
+    return;
   }
 });
 export default router;

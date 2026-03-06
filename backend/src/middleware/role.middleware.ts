@@ -3,14 +3,17 @@ import { AuthRequest } from "../types/auth";
 
 export const authorize =
   (...roles: Array<"admin" | "teacher" | "student">) =>
-  (req: AuthRequest, res: Response, next: NextFunction) => {
+  (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      return res.status(401).json({ message: "Not authenticated" });
+      res.status(401).json({ message: "Not authenticated" });
+      return;
     }
 
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ message: "Access denied" });
+      res.status(403).json({ message: "Access denied" });
+      return;
     }
 
     next();
+    return;
   };

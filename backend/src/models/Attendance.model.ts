@@ -1,16 +1,31 @@
-import { Schema, model, Types } from "mongoose";
+import mongoose, { Document, Schema } from "mongoose";
 
-const attendanceSchema = new Schema(
+export interface IAttendance extends Document {
+  student: mongoose.Types.ObjectId;
+  teacher: mongoose.Types.ObjectId;
+  subject: string;
+  date: Date;
+  status: "present" | "absent";
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const attendanceSchema = new Schema<IAttendance>(
   {
     student: {
-      type: Types.ObjectId,
+      type: Schema.Types.ObjectId,
+      ref: "Student",
+      required: true,
+    },
+    teacher: {
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
     subject: {
-      type: Types.ObjectId,
-      ref: "Subject",
+      type: String,
       required: true,
+      trim: true,
     },
     date: {
       type: Date,
@@ -25,6 +40,12 @@ const attendanceSchema = new Schema(
   { timestamps: true }
 );
 
-attendanceSchema.index({ student: 1, subject: 1, date: 1 }, { unique: true });
+attendanceSchema.index(
+  { student: 1, subject: 1, date: 1 },
+  { unique: true, name: "attendance_student_subject_date_unique" }
+);
 
-export const Attendance = model("Attendance", attendanceSchema);
+export const Attendance = mongoose.model<IAttendance>(
+  "Attendance",
+  attendanceSchema
+);

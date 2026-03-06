@@ -88,10 +88,14 @@ export const login = async (req: Request, res: Response) => {
 
     // 5️⃣ Generate JWT
     const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "7d" }
-    );
+  {
+    id: user._id,
+    role: user.role,
+    email: user.email,   // 🔥 ADD THIS
+  },
+  process.env.JWT_SECRET as string,
+  { expiresIn: "7d" }
+);
 
     // 6️⃣ Send response
     return res.status(200).json({

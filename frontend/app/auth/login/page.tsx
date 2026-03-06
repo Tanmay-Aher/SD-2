@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -28,29 +30,28 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const response = await fetch(
+      const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Invalid credentials");
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Login failed");
       }
 
-      const data = await response.json();
-
-      // 🔐 Store auth
+      // ✅ Store auth properly
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
-      // ✅ Secure redirect
-      router.push("/dashboard");
+      // Redirect based on role
+      const role = data.user.role;
+      router.push(`/dashboard/${role}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -67,6 +68,7 @@ export default function LoginPage() {
             Enter your credentials to access your account
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -95,7 +97,7 @@ export default function LoginPage() {
               </Alert>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button className="w-full" type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -106,6 +108,10 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
+
+          <div className="text-center text-sm text-gray-600 mt-4">
+            Don't have an account? <Link href="/auth/signup" className="text-blue-600 hover:underline">Sign up</Link>
+          </div>
         </CardContent>
       </Card>
     </div>

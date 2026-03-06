@@ -21,9 +21,9 @@ import {
 import {
   students as initialStudents, teachers as initialTeachers,
   assignments, announcements, exams as initialExams,
-  systemAnalyticsData,
 } from "@/lib/data"
 import type { Student, Teacher } from "@/lib/data"
+import { api } from "@/lib/api"
 import {
   Users, GraduationCap, BookOpen, BarChart3, TrendingUp, Pencil,
   Trash2, Plus, Megaphone, Calendar, Settings, Shield, UserCog,
@@ -56,6 +56,64 @@ function StatCard({ title, value, subtitle, icon: Icon, trend }: {
 }
 
 function AdminOverview() {
+  const [stats, setStats] = React.useState({
+    totalStudents: 0,
+    totalTeachers: 0,
+    activeCourses: 0,
+    avgPerformance: 0,
+  })
+  const [systemGrowth, setSystemGrowth] = React.useState<
+    Array<{ month: string; students: number; teachers: number; courses: number }>
+  >([])
+  const [recentItems, setRecentItems] = React.useState<
+    Array<{ title: string; date: string; subject: string }>
+  >([])
+
+  React.useEffect(() => {
+    const loadOverview = async () => {
+      try {
+        const { data, error } = await api.get<{
+          stats: {
+            totalStudents: number
+            totalTeachers: number
+            activeCourses: number
+            avgPerformance: number
+          }
+          charts: {
+            systemGrowth: Array<{ month: string; students: number; teachers: number; courses: number }>
+          }
+          recentAnnouncements: Array<{ title: string; date: string; subject: string }>
+        }>("/api/dashboard/admin-overview")
+
+        if (error) {
+          return
+        }
+
+        setStats({
+          totalStudents: Number(data?.stats?.totalStudents || 0),
+          totalTeachers: Number(data?.stats?.totalTeachers || 0),
+          activeCourses: Number(data?.stats?.activeCourses || 0),
+          avgPerformance: Number(data?.stats?.avgPerformance || 0),
+        })
+        setSystemGrowth(Array.isArray(data?.charts?.systemGrowth) ? data!.charts.systemGrowth : [])
+        setRecentItems(
+          Array.isArray(data?.recentAnnouncements) ? data!.recentAnnouncements : []
+        )
+      } catch {
+        setStats({
+          totalStudents: 0,
+          totalTeachers: 0,
+          activeCourses: 0,
+          avgPerformance: 0,
+        })
+        setSystemGrowth([])
+        setRecentItems([])
+      }
+    }
+
+    loadOverview()
+  }, [])
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -63,10 +121,10 @@ function AdminOverview() {
         <p className="text-sm text-muted-foreground">System-wide overview and analytics</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Students" value="362" subtitle="Enrolled this semester" icon={Users} trend="+7 this month" />
-        <StatCard title="Total Teachers" value="32" subtitle="Active faculty" icon={GraduationCap} trend="+2 this semester" />
-        <StatCard title="Active Courses" value="52" subtitle="Across all departments" icon={BookOpen} />
-        <StatCard title="Avg Performance" value="82%" subtitle="School-wide average" icon={BarChart3} trend="+3% from last month" />
+        <StatCard title="Total Students" value={String(stats.totalStudents)} subtitle="Enrolled in system" icon={Users} />
+        <StatCard title="Total Teachers" value={String(stats.totalTeachers)} subtitle="Active faculty" icon={GraduationCap} />
+        <StatCard title="Active Courses" value={String(stats.activeCourses)} subtitle="Across all departments" icon={BookOpen} />
+        <StatCard title="Avg Performance" value={`${stats.avgPerformance}%`} subtitle="Assignment completion" icon={BarChart3} />
       </div>
       <Card>
         <CardHeader>
@@ -75,7 +133,7 @@ function AdminOverview() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={systemAnalyticsData}>
+            <LineChart data={systemGrowth}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis fontSize={12} tickLine={false} axisLine={false} />
@@ -95,18 +153,21 @@ function AdminOverview() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-3">
-              {announcements.slice(0, 3).map((a) => (
-                <div key={a.id} className="flex items-start gap-3 rounded-lg border p-3">
+              {recentItems.map((a) => (
+                <div key={`${a.title}-${a.date}`} className="flex items-start gap-3 rounded-lg border p-3">
                   <Megaphone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-foreground truncate">{a.title}</span>
-                      <Badge variant={a.priority === "high" ? "destructive" : "secondary"} className="text-[10px] shrink-0">{a.priority}</Badge>
+                      <Badge variant="secondary" className="text-[10px] shrink-0">{a.subject}</Badge>
                     </div>
                     <span className="text-xs text-muted-foreground">{a.date}</span>
                   </div>
                 </div>
               ))}
+              {recentItems.length === 0 && (
+                <p className="text-sm text-muted-foreground">No announcements yet.</p>
+              )}
             </div>
           </CardContent>
         </Card>
