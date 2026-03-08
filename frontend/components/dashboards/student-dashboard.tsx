@@ -9,7 +9,6 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts"
 import {
-  goalsData, weeklyProgressData,
 } from "@/lib/data"
 import { BookOpen, CheckCircle2, Clock, TrendingUp, CalendarDays, Megaphone } from "lucide-react"
 import { api } from "@/lib/api"
@@ -378,63 +377,6 @@ function StudentAssignments() {
   )
 }
 
-function StudentGoals() {
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Goals & Accuracy</h2>
-        <p className="text-sm text-muted-foreground">Monitor your learning goals and accuracy trends</p>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Goal Completion</CardTitle>
-            <CardDescription>Distribution of your learning goals</CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={goalsData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={4}
-                  dataKey="value"
-                  label={({ name, value }) => `${name}: ${value}%`}
-                >
-                  {goalsData.map((_, index) => (
-                    <Cell key={`cell-${index}`} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Weekly Accuracy Trend</CardTitle>
-            <CardDescription>Your accuracy improvement over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={weeklyProgressData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="week" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis domain={[60, 100]} fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
-                <Line type="monotone" dataKey="accuracy" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{ fill: "hsl(var(--chart-2))", r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
 import { Download } from "lucide-react"
 
 function StudentTimetable() {
@@ -558,7 +500,6 @@ export function StudentDashboard({ activeTab }: { activeTab: string }) {
     case "attendance": return <StudentAttendance />
     case "marks": return <StudentMarks />
     case "assignments": return <StudentAssignments />
-    case "goals": return <StudentGoals />
     case "timetable": return <StudentTimetable />
     case "announcements": return <StudentAnnouncements />
     default: return <StudentOverview />

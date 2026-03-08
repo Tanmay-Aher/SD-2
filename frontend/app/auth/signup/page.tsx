@@ -78,14 +78,17 @@ export default function SignupPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Sign Up</CardTitle>
-          <CardDescription>Signup is currently frozen. Please check back later.</CardDescription>
+          <CardDescription>Please contact the HOD for a new account registeration</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert>
             <AlertDescription>
-              Account creation is temporarily disabled. Contact an administrator for assistance.
+              Please contact the HOD for a new account registeration
             </AlertDescription>
           </Alert>
+          <Button asChild className="w-full mt-4">
+            <Link href="/auth/login">Go to Login</Link>
+          </Button>
         </CardContent>
       </Card>
     </div>

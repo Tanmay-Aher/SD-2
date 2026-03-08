@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
-  BookOpen, Users, ClipboardList, Target, Calendar, Megaphone,
+  BookOpen, Users, ClipboardList, Calendar, Megaphone,
   LayoutDashboard, GraduationCap, MessageSquare, BarChart3,
   Settings, FileText, UserCog, ChevronDown, LogOut, UserCircle2,
 } from "lucide-react"
@@ -27,7 +27,6 @@ const roleConfig: Record<Role, { label: string; tabs: { label: string; icon: Rea
       { label: "Attendance", icon: BarChart3, value: "attendance" },
       { label: "Marks", icon: FileText, value: "marks" },
       { label: "Assignments", icon: ClipboardList, value: "assignments" },
-      { label: "Goals & Accuracy", icon: Target, value: "goals" },
       { label: "Timetable", icon: Calendar, value: "timetable" },
       { label: "Announcements", icon: Megaphone, value: "announcements" },
     ],
@@ -35,7 +34,7 @@ const roleConfig: Record<Role, { label: string; tabs: { label: string; icon: Rea
   teacher: {
     label: "Teacher",
     tabs: [
-      { label: "Overview", icon: LayoutDashboard, value: "overview" },
+      { label: "Dashboard", icon: LayoutDashboard, value: "overview" },
       { label: "Students", icon: Users, value: "students" },
       { label: "Attendance", icon: BarChart3, value: "attendance" },
       { label: "Assignments", icon: ClipboardList, value: "assignments" },
@@ -47,13 +46,14 @@ const roleConfig: Record<Role, { label: string; tabs: { label: string; icon: Rea
   admin: {
     label: "Administrator",
     tabs: [
-      { label: "Overview", icon: LayoutDashboard, value: "overview" },
+      { label: "Dashboard", icon: LayoutDashboard, value: "overview" },
+      { label: "Users", icon: UserCog, value: "users" },
       { label: "Students", icon: Users, value: "students" },
       { label: "Teachers", icon: GraduationCap, value: "teachers" },
-      { label: "Exams", icon: BookOpen, value: "exams" },
+      { label: "Subjects", icon: BookOpen, value: "subjects" },
       { label: "Assignments", icon: ClipboardList, value: "assignments" },
       { label: "Announcements", icon: Megaphone, value: "announcements" },
-      { label: "Settings", icon: Settings, value: "settings" },
+      { label: "Attendance Reports", icon: BarChart3, value: "attendance-reports" },
     ],
   },
 }

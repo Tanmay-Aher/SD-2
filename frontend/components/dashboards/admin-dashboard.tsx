@@ -1,538 +1,723 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
+import * as React from "react";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog"
+  BarChart,
+  Bar,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
+  Megaphone,
+  ClipboardList,
+  Users,
+  GraduationCap,
+  CircleCheckBig,
+  BookOpen,
+  Trash2,
+  Pencil,
+  Plus,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
-  BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-} from "recharts"
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
-  students as initialStudents, teachers as initialTeachers,
-  assignments, announcements, exams as initialExams,
-} from "@/lib/data"
-import type { Student, Teacher } from "@/lib/data"
-import { api } from "@/lib/api"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
-  Users, GraduationCap, BookOpen, BarChart3, TrendingUp, Pencil,
-  Trash2, Plus, Megaphone, Calendar, Settings, Shield, UserCog,
-} from "lucide-react"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-function StatCard({ title, value, subtitle, icon: Icon, trend }: {
-  title: string; value: string; subtitle: string; icon: React.ElementType; trend?: string
+type Pagination = { page: number; limit: number; total: number; totalPages: number };
+type AdminUser = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  role: "admin" | "teacher" | "student";
+  department?: string | null;
+  class?: string | null;
+  rollNumber?: number | null;
+};
+type StudentRow = {
+  id: string;
+  userId: string;
+  fullName: string;
+  email: string;
+  class: string;
+  rollNumber: number;
+};
+
+const PAGE_SIZE = 8;
+
+function Pager({
+  pagination,
+  onChange,
+}: {
+  pagination: Pagination;
+  onChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between border-t px-4 py-3">
+      <p className="text-sm text-muted-foreground">
+        Page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pagination.page <= 1}
+          onClick={() => onChange(pagination.page - 1)}
+        >
+          Previous
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pagination.page >= pagination.totalPages}
+          onClick={() => onChange(pagination.page + 1)}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+}: {
+  title: string;
+  value: number | string;
+  icon: React.ElementType;
 }) {
   return (
     <Card>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-muted-foreground">{title}</span>
-            <span className="text-2xl font-bold text-foreground">{value}</span>
-            <span className="text-xs text-muted-foreground">{subtitle}</span>
-          </div>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-            <Icon className="h-5 w-5 text-primary" />
-          </div>
+      <CardContent className="flex items-center justify-between p-5">
+        <div>
+          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="mt-1 text-3xl font-bold">{value}</p>
         </div>
-        {trend && (
-          <div className="mt-3 flex items-center gap-1 text-xs font-medium text-emerald-600">
-            <TrendingUp className="h-3 w-3" /> {trend}
-          </div>
-        )}
+        <div className="rounded-lg bg-primary/10 p-3">
+          <Icon className="h-5 w-5 text-primary" />
+        </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
 function AdminOverview() {
   const [stats, setStats] = React.useState({
     totalStudents: 0,
     totalTeachers: 0,
-    activeCourses: 0,
-    avgPerformance: 0,
-  })
-  const [systemGrowth, setSystemGrowth] = React.useState<
-    Array<{ month: string; students: number; teachers: number; courses: number }>
-  >([])
-  const [recentItems, setRecentItems] = React.useState<
-    Array<{ title: string; date: string; subject: string }>
-  >([])
+    totalAssignments: 0,
+    totalAnnouncements: 0,
+    attendanceAverage: 0,
+  });
 
   React.useEffect(() => {
-    const loadOverview = async () => {
-      try {
-        const { data, error } = await api.get<{
-          stats: {
-            totalStudents: number
-            totalTeachers: number
-            activeCourses: number
-            avgPerformance: number
-          }
-          charts: {
-            systemGrowth: Array<{ month: string; students: number; teachers: number; courses: number }>
-          }
-          recentAnnouncements: Array<{ title: string; date: string; subject: string }>
-        }>("/api/dashboard/admin-overview")
+    const run = async () => {
+      const { data } = await api.get<{ stats: typeof stats }>("/api/admin/overview");
+      if (data?.stats) setStats(data.stats);
+    };
+    run();
+  }, []);
 
-        if (error) {
-          return
-        }
-
-        setStats({
-          totalStudents: Number(data?.stats?.totalStudents || 0),
-          totalTeachers: Number(data?.stats?.totalTeachers || 0),
-          activeCourses: Number(data?.stats?.activeCourses || 0),
-          avgPerformance: Number(data?.stats?.avgPerformance || 0),
-        })
-        setSystemGrowth(Array.isArray(data?.charts?.systemGrowth) ? data!.charts.systemGrowth : [])
-        setRecentItems(
-          Array.isArray(data?.recentAnnouncements) ? data!.recentAnnouncements : []
-        )
-      } catch {
-        setStats({
-          totalStudents: 0,
-          totalTeachers: 0,
-          activeCourses: 0,
-          avgPerformance: 0,
-        })
-        setSystemGrowth([])
-        setRecentItems([])
-      }
-    }
-
-    loadOverview()
-  }, [])
+  const chartData = [
+    { name: "Students", value: stats.totalStudents },
+    { name: "Teachers", value: stats.totalTeachers },
+    { name: "Assignments", value: stats.totalAssignments },
+    { name: "Announcements", value: stats.totalAnnouncements },
+  ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Admin Dashboard</h2>
-        <p className="text-sm text-muted-foreground">System-wide overview and analytics</p>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Students" value={String(stats.totalStudents)} subtitle="Enrolled in system" icon={Users} />
-        <StatCard title="Total Teachers" value={String(stats.totalTeachers)} subtitle="Active faculty" icon={GraduationCap} />
-        <StatCard title="Active Courses" value={String(stats.activeCourses)} subtitle="Across all departments" icon={BookOpen} />
-        <StatCard title="Avg Performance" value={`${stats.avgPerformance}%`} subtitle="Assignment completion" icon={BarChart3} />
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold">Admin Dashboard</h2>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard title="Total Students" value={stats.totalStudents} icon={Users} />
+        <StatCard title="Total Teachers" value={stats.totalTeachers} icon={GraduationCap} />
+        <StatCard title="Total Assignments" value={stats.totalAssignments} icon={ClipboardList} />
+        <StatCard title="Total Announcements" value={stats.totalAnnouncements} icon={Megaphone} />
+        <StatCard
+          title="Attendance Average"
+          value={`${stats.attendanceAverage}%`}
+          icon={CircleCheckBig}
+        />
       </div>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">System Growth Analytics</CardTitle>
-          <CardDescription>Students, teachers, and courses over time</CardDescription>
+          <CardTitle>System Totals</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={systemGrowth}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
-              <Legend />
-              <Line type="monotone" dataKey="students" stroke="hsl(var(--chart-1))" strokeWidth={2} name="Students" />
-              <Line type="monotone" dataKey="teachers" stroke="hsl(var(--chart-2))" strokeWidth={2} name="Teachers" />
-              <Line type="monotone" dataKey="courses" stroke="hsl(var(--chart-3))" strokeWidth={2} name="Courses" />
-            </LineChart>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="value" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </CardContent>
       </Card>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent Announcements</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-3">
-              {recentItems.map((a) => (
-                <div key={`${a.title}-${a.date}`} className="flex items-start gap-3 rounded-lg border p-3">
-                  <Megaphone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground truncate">{a.title}</span>
-                      <Badge variant="secondary" className="text-[10px] shrink-0">{a.subject}</Badge>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{a.date}</span>
-                  </div>
-                </div>
-              ))}
-              {recentItems.length === 0 && (
-                <p className="text-sm text-muted-foreground">No announcements yet.</p>
+    </div>
+  );
+}
+
+function UsersPanel() {
+  const [rows, setRows] = React.useState<AdminUser[]>([]);
+  const [pagination, setPagination] = React.useState<Pagination>({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  });
+  const [search, setSearch] = React.useState("");
+  const [roleFilter, setRoleFilter] = React.useState("all");
+  const [open, setOpen] = React.useState(false);
+  const [form, setForm] = React.useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    role: "teacher",
+    department: "",
+    className: "",
+    rollNumber: "",
+  });
+
+  const load = React.useCallback(
+    async (page = pagination.page) => {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(PAGE_SIZE),
+      });
+      if (search.trim()) params.set("search", search.trim());
+      if (roleFilter !== "all") params.set("role", roleFilter);
+      const { data } = await api.get<{ users: AdminUser[]; pagination: Pagination }>(
+        `/api/admin/users?${params.toString()}`
+      );
+      if (data) {
+        setRows(data.users || []);
+        setPagination(data.pagination || pagination);
+      }
+    },
+    [pagination, roleFilter, search]
+  );
+
+  React.useEffect(() => {
+    load(1);
+  }, [load]);
+
+  const createUser = async () => {
+    const payload: Record<string, any> = {
+      firstName: form.firstName,
+      lastName: form.lastName,
+      email: form.email,
+      password: form.password,
+      role: form.role,
+    };
+    if (form.role === "teacher") payload.department = form.department;
+    if (form.role === "student") {
+      payload.class = form.className;
+      payload.rollNumber = Number(form.rollNumber);
+    }
+    const { error } = await api.post("/api/admin/users", payload);
+    if (!error) {
+      setOpen(false);
+      setForm({
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+        role: "teacher",
+        department: "",
+        className: "",
+        rollNumber: "",
+      });
+      await load(1);
+    }
+  };
+
+  const removeUser = async (id: string) => {
+    await api.delete(`/api/admin/users/${id}`);
+    await load();
+  };
+
+  const updateRole = async (id: string, role: "admin" | "teacher" | "student") => {
+    const body: Record<string, any> = { role };
+    if (role === "teacher") body.department = "General";
+    if (role === "student") {
+      body.class = "General";
+      body.rollNumber = 999999;
+    }
+    await api.put(`/api/admin/users/${id}`, body);
+    await load();
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="w-full max-w-sm">
+          <Label>Search</Label>
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or email" />
+        </div>
+        <div className="w-[200px]">
+          <Label>Role</Label>
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="teacher">Teacher</SelectItem>
+              <SelectItem value="student">Student</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={() => load(1)}>Apply</Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="ml-auto"><Plus className="mr-2 h-4 w-4" />Create User</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create User</DialogTitle>
+              <DialogDescription>Add admin/teacher/student account</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3">
+              <Input placeholder="First name" value={form.firstName} onChange={(e) => setForm((p) => ({ ...p, firstName: e.target.value }))} />
+              <Input placeholder="Last name" value={form.lastName} onChange={(e) => setForm((p) => ({ ...p, lastName: e.target.value }))} />
+              <Input placeholder="Email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
+              <Input placeholder="Password" type="password" value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} />
+              <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="teacher">Teacher</SelectItem>
+                  <SelectItem value="student">Student</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.role === "teacher" && (
+                <Input placeholder="Department" value={form.department} onChange={(e) => setForm((p) => ({ ...p, department: e.target.value }))} />
+              )}
+              {form.role === "student" && (
+                <>
+                  <Input placeholder="Class" value={form.className} onChange={(e) => setForm((p) => ({ ...p, className: e.target.value }))} />
+                  <Input placeholder="Roll number" value={form.rollNumber} onChange={(e) => setForm((p) => ({ ...p, rollNumber: e.target.value }))} />
+                </>
               )}
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Upcoming Exams</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-3">
-              {initialExams.slice(0, 3).map((e) => (
-                <div key={e.id} className="flex items-center gap-3 rounded-lg border p-3">
-                  <Calendar className="h-4 w-4 text-primary shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-foreground">{e.subject}</span>
-                    <div className="text-xs text-muted-foreground">{e.date} at {e.time} - {e.room}</div>
-                  </div>
-                  <Badge variant="outline">{e.status}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
-
-function AdminStudents() {
-  const [studentList, setStudentList] = React.useState(initialStudents)
-  const [open, setOpen] = React.useState(false)
-  const [name, setName] = React.useState("")
-  const [email, setEmail] = React.useState("")
-  const [grade, setGrade] = React.useState("")
-
-  const handleAdd = () => {
-    if (!name || !email || !grade) return
-    setStudentList(prev => [...prev, {
-      id: String(Date.now()), name, email, grade, attendance: 100, avgMarks: 0, status: "active" as const,
-    }])
-    setName(""); setEmail(""); setGrade(""); setOpen(false)
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Students</h2>
-          <p className="text-sm text-muted-foreground">Manage student records</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Add Student</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Student</DialogTitle>
-              <DialogDescription>Register a new student</DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2"><Label>Full Name</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Student name" /></div>
-              <div className="flex flex-col gap-2"><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="student@school.edu" /></div>
-              <div className="flex flex-col gap-2">
-                <Label>Grade</Label>
-                <Select value={grade} onValueChange={setGrade}>
-                  <SelectTrigger><SelectValue placeholder="Select grade" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10A">10A</SelectItem>
-                    <SelectItem value="10B">10B</SelectItem>
-                    <SelectItem value="10C">10C</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={handleAdd}>Add Student</Button>
-            </DialogFooter>
+            <DialogFooter><Button onClick={createUser}>Create</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
+
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Grade</TableHead>
-                <TableHead>Attendance</TableHead>
-                <TableHead>Avg Marks</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Role</TableHead><TableHead>Meta</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
-              {studentList.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    <div>
-                      <span className="font-medium">{s.name}</span>
-                      <div className="text-xs text-muted-foreground">{s.email}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{s.grade}</TableCell>
-                  <TableCell>
-                    <span className={s.attendance >= 90 ? "text-emerald-600 font-medium" : s.attendance >= 80 ? "text-amber-600 font-medium" : "text-red-600 font-medium"}>
-                      {s.attendance}%
-                    </span>
-                  </TableCell>
-                  <TableCell>{s.avgMarks}%</TableCell>
-                  <TableCell><Badge variant={s.status === "active" ? "default" : "secondary"}>{s.status}</Badge></TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setStudentList(prev => prev.filter(x => x.id !== s.id))}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.fullName}</TableCell>
+                  <TableCell>{row.email}</TableCell>
+                  <TableCell><Badge variant="outline">{row.role}</Badge></TableCell>
+                  <TableCell>{row.department || row.class || "-"}</TableCell>
+                  <TableCell className="text-right space-x-1">
+                    <Select value={row.role} onValueChange={(v) => updateRole(row.id, v as any)}>
+                      <SelectTrigger className="inline-flex h-8 w-[120px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">admin</SelectItem>
+                        <SelectItem value="teacher">teacher</SelectItem>
+                        <SelectItem value="student">student</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button variant="ghost" size="icon" onClick={() => removeUser(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <Pager pagination={pagination} onChange={load} />
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
-function AdminTeachers() {
-  const [teacherList, setTeacherList] = React.useState(initialTeachers)
-  const [open, setOpen] = React.useState(false)
-  const [name, setName] = React.useState("")
-  const [email, setEmail] = React.useState("")
-  const [subject, setSubject] = React.useState("")
+function StudentsPanel() {
+  const [rows, setRows] = React.useState<StudentRow[]>([]);
+  const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
+  const [search, setSearch] = React.useState("");
+  const [department, setDepartment] = React.useState("");
 
-  const handleAdd = () => {
-    if (!name || !email || !subject) return
-    setTeacherList(prev => [...prev, {
-      id: String(Date.now()), name, email, subject, students: 0, status: "active" as const,
-    }])
-    setName(""); setEmail(""); setSubject(""); setOpen(false)
-  }
+  const load = React.useCallback(async (page = pagination.page) => {
+    const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+    if (search.trim()) q.set("search", search.trim());
+    if (department.trim()) q.set("department", department.trim());
+    const { data } = await api.get<{ students: StudentRow[]; pagination: Pagination }>(`/api/admin/students?${q.toString()}`);
+    if (data) {
+      setRows(data.students || []);
+      setPagination(data.pagination || pagination);
+    }
+  }, [department, pagination, search]);
+
+  React.useEffect(() => { load(1); }, [load]);
+
+  const deleteRow = async (id: string) => {
+    await api.delete(`/api/admin/students/${id}`);
+    await load();
+  };
+
+  const editRow = async (row: StudentRow) => {
+    const nextClass = window.prompt("Class", row.class);
+    if (!nextClass) return;
+    await api.put(`/api/admin/students/${row.id}`, { class: nextClass });
+    await load();
+  };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Teachers</h2>
-          <p className="text-sm text-muted-foreground">Manage faculty members</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Add Teacher</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Teacher</DialogTitle>
-              <DialogDescription>Register a new teacher</DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2"><Label>Full Name</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Teacher name" /></div>
-              <div className="flex flex-col gap-2"><Label>Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="teacher@school.edu" /></div>
-              <div className="flex flex-col gap-2">
-                <Label>Subject</Label>
-                <Select value={subject} onValueChange={setSubject}>
-                  <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Mathematics">Mathematics</SelectItem>
-                    <SelectItem value="Physics">Physics</SelectItem>
-                    <SelectItem value="English">English</SelectItem>
-                    <SelectItem value="Chemistry">Chemistry</SelectItem>
-                    <SelectItem value="Biology">Biology</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={handleAdd}>Add Teacher</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3">
+        <Input className="max-w-sm" placeholder="Search students" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input className="w-[220px]" placeholder="Filter by department/class" value={department} onChange={(e) => setDepartment(e.target.value)} />
+        <Button onClick={() => load(1)}>Apply</Button>
       </div>
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Students</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
+            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Class</TableHead><TableHead>Roll #</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
-              {teacherList.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell>
-                    <div>
-                      <span className="font-medium">{t.name}</span>
-                      <div className="text-xs text-muted-foreground">{t.email}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{t.subject}</TableCell>
-                  <TableCell>{t.students}</TableCell>
-                  <TableCell><Badge variant={t.status === "active" ? "default" : "secondary"}>{t.status}</Badge></TableCell>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.fullName}</TableCell>
+                  <TableCell>{row.email}</TableCell>
+                  <TableCell>{row.class}</TableCell>
+                  <TableCell>{row.rollNumber}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setTeacherList(prev => prev.filter(x => x.id !== t.id))}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => editRow(row)}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteRow(row.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+          <Pager pagination={pagination} onChange={load} />
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
-function AdminExams() {
-  const [examList, setExamList] = React.useState(initialExams)
-  const [open, setOpen] = React.useState(false)
-  const [subject, setSubject] = React.useState("")
-  const [date, setDate] = React.useState("")
-  const [time, setTime] = React.useState("")
-  const [room, setRoom] = React.useState("")
+function TeachersPanel() {
+  const [rows, setRows] = React.useState<AdminUser[]>([]);
+  const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
+  const [search, setSearch] = React.useState("");
 
-  const handleAdd = () => {
-    if (!subject || !date || !time || !room) return
-    setExamList(prev => [...prev, { id: String(Date.now()), subject, date, time, room, status: "upcoming" as const }])
-    setSubject(""); setDate(""); setTime(""); setRoom(""); setOpen(false)
-  }
+  const load = React.useCallback(async (page = pagination.page) => {
+    const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE), role: "teacher" });
+    if (search.trim()) q.set("search", search.trim());
+    const { data } = await api.get<{ users: AdminUser[]; pagination: Pagination }>(`/api/admin/users?${q.toString()}`);
+    if (data) {
+      setRows(data.users || []);
+      setPagination(data.pagination || pagination);
+    }
+  }, [pagination, search]);
+
+  React.useEffect(() => { load(1); }, [load]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Exams</h2>
-          <p className="text-sm text-muted-foreground">Schedule and manage examinations</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />Schedule Exam</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Schedule Exam</DialogTitle>
-              <DialogDescription>Set a new exam date</DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label>Subject</Label>
-                <Select value={subject} onValueChange={setSubject}>
-                  <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Mathematics">Mathematics</SelectItem>
-                    <SelectItem value="Physics">Physics</SelectItem>
-                    <SelectItem value="English">English</SelectItem>
-                    <SelectItem value="Chemistry">Chemistry</SelectItem>
-                    <SelectItem value="Biology">Biology</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-2"><Label>Date</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
-              <div className="flex flex-col gap-2"><Label>Time</Label><Input type="time" value={time} onChange={e => setTime(e.target.value)} /></div>
-              <div className="flex flex-col gap-2"><Label>Room</Label><Input value={room} onChange={e => setRoom(e.target.value)} placeholder="e.g., Hall A" /></div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={handleAdd}>Schedule</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input className="max-w-sm" placeholder="Search teachers" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Button onClick={() => load(1)}>Apply</Button>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Exam Calendar</CardTitle>
-            <CardDescription>Upcoming examination dates</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-3">
-              {examList.map((e) => (
-                <div key={e.id} className="flex items-center gap-3 rounded-lg border p-3">
-                  <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg bg-primary/10">
-                    <span className="text-xs font-medium text-primary">{e.date.split("-")[1]}/{e.date.split("-")[2]}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-foreground">{e.subject}</span>
-                    <div className="text-xs text-muted-foreground">{e.time} - {e.room}</div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Badge variant="outline">{e.status}</Badge>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setExamList(prev => prev.filter(x => x.id !== e.id))}>
-                      <Trash2 className="h-4 w-4" />
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Department</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>{row.fullName}</TableCell>
+                  <TableCell>{row.email}</TableCell>
+                  <TableCell>{row.department || "-"}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={async () => { await api.delete(`/api/admin/users/${row.id}`); await load(); }}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
-                  </div>
-                </div>
+                  </TableCell>
+                </TableRow>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Exam Schedule Overview</CardTitle>
-            <CardDescription>Distribution by subject</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={examList.map(e => ({ subject: e.subject, count: 1 }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="subject" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={{ borderRadius: "8px", border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
-                <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Exams" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+            </TableBody>
+          </Table>
+          <Pager pagination={pagination} onChange={load} />
+        </CardContent>
+      </Card>
     </div>
-  )
+  );
 }
 
-function AdminAssignments() {
-  const statusStyles: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-800",
-    submitted: "bg-blue-100 text-blue-800",
-    graded: "bg-emerald-100 text-emerald-800",
-  }
+function SubjectsPanel() {
+  const [rows, setRows] = React.useState<any[]>([]);
+  const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
+  const [search, setSearch] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const [department, setDepartment] = React.useState("");
+  const [teacherUserId, setTeacherUserId] = React.useState("");
+
+  const load = React.useCallback(async (page = pagination.page) => {
+    const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+    if (search.trim()) q.set("search", search.trim());
+    const { data } = await api.get<any>(`/api/admin/subjects?${q.toString()}`);
+    if (!data) return;
+    setRows(data.subjects || []);
+    setPagination(data.pagination || pagination);
+  }, [pagination, search]);
+
+  React.useEffect(() => { load(1); }, [load]);
+
+  const createSubject = async () => {
+    const payload: Record<string, string> = { name, department };
+    if (teacherUserId.trim()) payload.teacherUserId = teacherUserId.trim();
+    const { error } = await api.post("/api/admin/subjects", payload);
+    if (!error) {
+      setOpen(false);
+      setName("");
+      setDepartment("");
+      setTeacherUserId("");
+      await load(1);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Assignments</h2>
-        <p className="text-sm text-muted-foreground">View all assignments across the system</p>
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input className="max-w-sm" placeholder="Search subjects" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Button onClick={() => load(1)}>Apply</Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild><Button className="ml-auto"><Plus className="mr-2 h-4 w-4" />Create Subject</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Create Subject</DialogTitle><DialogDescription>Add subject and optionally assign teacher</DialogDescription></DialogHeader>
+            <div className="grid gap-3">
+              <Input placeholder="Subject name" value={name} onChange={(e) => setName(e.target.value)} />
+              <Input placeholder="Department" value={department} onChange={(e) => setDepartment(e.target.value)} />
+              <Input placeholder="Teacher user id (optional)" value={teacherUserId} onChange={(e) => setTeacherUserId(e.target.value)} />
+            </div>
+            <DialogFooter><Button onClick={createSubject}>Create</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       <Card>
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
+            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Department</TableHead><TableHead>Teacher</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
             <TableBody>
-              {assignments.map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell className="font-medium">{a.title}</TableCell>
-                  <TableCell>{a.subject}</TableCell>
-                  <TableCell>{a.dueDate}</TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyles[a.status]}`}>
-                      {a.status.charAt(0).toUpperCase() + a.status.slice(1)}
-                    </span>
+              {rows.map((row: any) => (
+                <TableRow key={String(row._id)}>
+                  <TableCell>{row.name}</TableCell>
+                  <TableCell>{row.department}</TableCell>
+                  <TableCell>{row.teachers?.[0] ? `${row.teachers[0].firstName} ${row.teachers[0].lastName}` : "-"}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={async () => {
+                      const nextTeacherUserId = window.prompt("Teacher user ID");
+                      if (!nextTeacherUserId) return;
+                      await api.put(`/api/admin/subjects/${row._id}/assign-teacher`, { teacherUserId: nextTeacherUserId });
+                      await load();
+                    }}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={async () => { await api.delete(`/api/admin/subjects/${row._id}`); await load(); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <Pager pagination={pagination} onChange={load} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AssignmentsPanel() {
+  const [rows, setRows] = React.useState<any[]>([]);
+  const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
+  const [search, setSearch] = React.useState("");
+
+  const load = React.useCallback(async (page = pagination.page) => {
+    const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+    if (search.trim()) q.set("search", search.trim());
+    const { data } = await api.get<any>(`/api/admin/assignments?${q.toString()}`);
+    if (!data) return;
+    setRows(data.assignments || []);
+    setPagination(data.pagination || pagination);
+  }, [pagination, search]);
+
+  React.useEffect(() => { load(1); }, [load]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input className="max-w-sm" placeholder="Search assignments" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Button onClick={() => load(1)}>Apply</Button>
+      </div>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Subject</TableHead><TableHead>Completion</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {rows.map((row: any) => (
+                <TableRow key={String(row._id)}>
+                  <TableCell>{row.title}</TableCell>
+                  <TableCell>{row.subject}</TableCell>
+                  <TableCell>{row.stats?.completionPercentage || 0}%</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={async () => { await api.delete(`/api/admin/assignments/${row._id}`); await load(); }}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <Pager pagination={pagination} onChange={load} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AnnouncementsPanel() {
+  const [rows, setRows] = React.useState<any[]>([]);
+  const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
+  const [search, setSearch] = React.useState("");
+
+  const load = React.useCallback(async (page = pagination.page) => {
+    const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+    if (search.trim()) q.set("search", search.trim());
+    const { data } = await api.get<any>(`/api/admin/announcements?${q.toString()}`);
+    if (!data) return;
+    setRows(data.announcements || []);
+    setPagination(data.pagination || pagination);
+  }, [pagination, search]);
+
+  React.useEffect(() => { load(1); }, [load]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Input className="max-w-sm" placeholder="Search announcements" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Button onClick={() => load(1)}>Apply</Button>
+      </div>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Subject</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {rows.map((row: any) => (
+                <TableRow key={String(row._id)}>
+                  <TableCell>{row.title}</TableCell>
+                  <TableCell>{row.subject}</TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="icon" onClick={async () => {
+                      const title = window.prompt("Title", row.title);
+                      const message = window.prompt("Message", row.message);
+                      if (!title || !message) return;
+                      await api.put(`/api/admin/announcements/${row._id}`, { title, message });
+                      await load();
+                    }}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={async () => { await api.delete(`/api/admin/announcements/${row._id}`); await load(); }}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <Pager pagination={pagination} onChange={load} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function AttendanceReportsPanel() {
+  const [summary, setSummary] = React.useState({ totalStudents: 0, attendancePercentage: 0 });
+  const [perClass, setPerClass] = React.useState<Array<{ class: string; attendancePercentage: number }>>([]);
+  const [perStudent, setPerStudent] = React.useState<Array<{ studentId: string; fullName: string; class: string; attendancePercentage: number }>>([]);
+
+  React.useEffect(() => {
+    const run = async () => {
+      const { data } = await api.get<any>("/api/admin/attendance/report");
+      if (!data) return;
+      setSummary({
+        totalStudents: data.summary?.totalStudents || 0,
+        attendancePercentage: data.summary?.attendancePercentage || 0,
+      });
+      setPerClass(data.perClass || []);
+      setPerStudent((data.perStudent || []).slice(0, 20));
+    };
+    run();
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <StatCard title="Students in Report" value={summary.totalStudents} icon={Users} />
+        <StatCard title="Overall Attendance" value={`${summary.attendancePercentage}%`} icon={CircleCheckBig} />
+      </div>
+      <Card>
+        <CardHeader><CardTitle>Attendance by Class</CardTitle></CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={perClass}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="class" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="attendancePercentage" fill="hsl(var(--chart-2))" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader><CardTitle>Per Student Attendance</CardTitle></CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead>Attendance %</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {perStudent.map((row) => (
+                <TableRow key={row.studentId}>
+                  <TableCell>{row.fullName}</TableCell>
+                  <TableCell>{row.class}</TableCell>
+                  <TableCell>{row.attendancePercentage}%</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -540,170 +725,16 @@ function AdminAssignments() {
         </CardContent>
       </Card>
     </div>
-  )
-}
-
-function AdminAnnouncements() {
-  const [list, setList] = React.useState(announcements)
-  const [open, setOpen] = React.useState(false)
-  const [title, setTitle] = React.useState("")
-  const [message, setMessage] = React.useState("")
-  const [priority, setPriority] = React.useState("")
-
-  const handlePost = () => {
-    if (!title || !message || !priority) return
-    setList(prev => [{ id: String(Date.now()), title, message, date: "2026-02-15", author: "Admin Office", priority: priority as "low" | "medium" | "high" }, ...prev])
-    setTitle(""); setMessage(""); setPriority(""); setOpen(false)
-  }
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Announcements</h2>
-          <p className="text-sm text-muted-foreground">System-wide announcements</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" />New Announcement</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Post Announcement</DialogTitle>
-              <DialogDescription>Broadcast a system-wide announcement</DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2"><Label>Title</Label><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Announcement title" /></div>
-              <div className="flex flex-col gap-2">
-                <Label>Message</Label>
-                <textarea
-                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  value={message} onChange={e => setMessage(e.target.value)} placeholder="Write your announcement..."
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Priority</Label>
-                <Select value={priority} onValueChange={setPriority}>
-                  <SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={handlePost}>Post</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-      <div className="flex flex-col gap-4">
-        {list.map((a) => (
-          <Card key={a.id}>
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <Megaphone className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">{a.title}</h3>
-                    <Badge variant={a.priority === "high" ? "destructive" : a.priority === "medium" ? "default" : "secondary"} className="text-[10px]">{a.priority}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">{a.message}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <span>By {a.author}</span>
-                    <span>{a.date}</span>
-                  </div>
-                </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive" onClick={() => setList(prev => prev.filter(x => x.id !== a.id))}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function AdminSettings() {
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Settings</h2>
-        <p className="text-sm text-muted-foreground">System configuration and role management</p>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4" />Role Management</CardTitle>
-            <CardDescription>Configure role-based access</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4">
-              {[
-                { role: "Student", perms: "View grades, attendance, timetable" },
-                { role: "Teacher", perms: "Manage students, assignments, marks" },
-                { role: "Admin", perms: "Full system access" },
-              ].map((r) => (
-                <div key={r.role} className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10">
-                      <UserCog className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-foreground">{r.role}</span>
-                      <p className="text-xs text-muted-foreground">{r.perms}</p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">Edit</Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><Settings className="h-4 w-4" />System Preferences</CardTitle>
-            <CardDescription>General system settings</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-4">
-              {[
-                { label: "Email Notifications", desc: "Send email alerts for important updates", default: true },
-                { label: "Auto-Grade Assignments", desc: "Automatically grade objective questions", default: false },
-                { label: "Attendance Alerts", desc: "Alert when attendance drops below 75%", default: true },
-                { label: "Maintenance Mode", desc: "Temporarily disable student and teacher access", default: false },
-              ].map((s) => (
-                <div key={s.label} className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <span className="text-sm font-medium text-foreground">{s.label}</span>
-                    <p className="text-xs text-muted-foreground">{s.desc}</p>
-                  </div>
-                  <Switch defaultChecked={s.default} />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
+  );
 }
 
 export function AdminDashboard({ activeTab }: { activeTab: string }) {
-  switch (activeTab) {
-    case "students": return <AdminStudents />
-    case "teachers": return <AdminTeachers />
-    case "exams": return <AdminExams />
-    case "assignments": return <AdminAssignments />
-    case "announcements": return <AdminAnnouncements />
-    case "settings": return <AdminSettings />
-    default: return <AdminOverview />
-  }
+  if (activeTab === "users") return <UsersPanel />;
+  if (activeTab === "students") return <StudentsPanel />;
+  if (activeTab === "teachers") return <TeachersPanel />;
+  if (activeTab === "subjects") return <SubjectsPanel />;
+  if (activeTab === "assignments") return <AssignmentsPanel />;
+  if (activeTab === "announcements") return <AnnouncementsPanel />;
+  if (activeTab === "attendance-reports") return <AttendanceReportsPanel />;
+  return <AdminOverview />;
 }

@@ -4,6 +4,7 @@ import { AuthRequest } from "../types/auth";
 import { Marks } from "../models/Marks.model";
 import { Student } from "../models/Student.model";
 import { Teacher } from "../models/Teacher.model";
+import { Subject } from "../models/Subject.model";
 import { User } from "../models/User.model";
 
 const updateMarksSchema = Joi.object({
@@ -105,6 +106,81 @@ export const getStudentMarks = async (req: AuthRequest, res: Response) => {
     console.error("GET STUDENT MARKS ERROR:", error);
     return res.status(500).json({
       message: "Server error while fetching marks",
+    });
+  }
+};
+
+export const getStudentSubjectProgressForTeacher = async (
+  req: AuthRequest,
+  res: Response
+) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { studentId } = req.params;
+    if (!studentId) {
+      return res.status(400).json({ message: "Student id is required" });
+    }
+
+    const teacher = await Teacher.findOne({ user: req.user.id })
+      .select("subjects")
+      .lean();
+    if (!teacher) {
+      return res.status(404).json({ message: "Teacher profile not found" });
+    }
+
+    const assignedSubjectId = teacher.subjects?.[0];
+    if (!assignedSubjectId) {
+      return res.status(404).json({ message: "No subject assigned to teacher" });
+    }
+
+    const [student, subject] = await Promise.all([
+      Student.findById(studentId)
+        .select("firstName lastName rollNumber class")
+        .lean(),
+      Subject.findById(assignedSubjectId).select("name").lean(),
+    ]);
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    if (!subject) {
+      return res.status(404).json({ message: "Assigned subject not found" });
+    }
+
+    const marks = await Marks.findOne({
+      student: studentId,
+      subject: subject.name,
+    })
+      .select("subject ct1 ct2 updatedAt")
+      .lean();
+
+    const ct1 = Number(marks?.ct1 ?? 0);
+    const ct2 = Number(marks?.ct2 ?? 0);
+    const total = ct1 + ct2;
+    const maxTotal = 60;
+    const percentage = Number(((total / maxTotal) * 100).toFixed(2));
+
+    return res.status(200).json({
+      student,
+      progress: {
+        subject: subject.name,
+        ct1,
+        ct2,
+        total,
+        maxTotal,
+        percentage,
+        hasMarks: Boolean(marks),
+        updatedAt: marks?.updatedAt ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("GET STUDENT SUBJECT PROGRESS ERROR:", error);
+    return res.status(500).json({
+      message: "Server error while fetching student subject progress",
     });
   }
 };

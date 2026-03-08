@@ -17,6 +17,7 @@ import assignmentRoutes from "./routes/assignment.routes";
 import announcementRoutes from "./routes/announcement.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import marksRoutes from "./routes/marks.routes";
+import adminRoutes from "./routes/admin.routes";
 import { initSocket } from "./socket";
 
 const app = express();
@@ -42,6 +43,7 @@ app.use("/api/assignments", assignmentRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/marks", marksRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.get("/", (_req, res) => {
   res.status(200).json({ message: "EduDash API running" });

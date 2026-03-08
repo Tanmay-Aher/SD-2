@@ -7,8 +7,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
+import { Progress } from "@/components/ui/progress"
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -158,32 +166,43 @@ function TeacherOverview() {
 }
 
 function TeacherStudents() {
+  type StudentRow = {
+    id: string
+    firstName: string
+    lastName: string
+    email: string
+    rollNumber: number
+    class: string
+  }
+
+  type StudentProgress = {
+    subject: string
+    ct1: number
+    ct2: number
+    total: number
+    maxTotal: number
+    percentage: number
+    hasMarks: boolean
+    updatedAt: string | null
+  }
+
   const [studentList, setStudentList] = React.useState<
-    {
-      id: string
-      firstName: string
-      lastName: string
-      email: string
-      rollNumber: number
-      class: string
-    }[]
+    StudentRow[]
   >([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState("")
+  const [isProgressDialogOpen, setIsProgressDialogOpen] = React.useState(false)
+  const [selectedStudentName, setSelectedStudentName] = React.useState("")
+  const [selectedProgress, setSelectedProgress] = React.useState<StudentProgress | null>(null)
+  const [progressLoading, setProgressLoading] = React.useState(false)
+  const [progressError, setProgressError] = React.useState("")
 
   React.useEffect(() => {
     const fetchStudents = async () => {
       try {
         setLoading(true)
         setError("")
-        const { data, error } = await api.get<{ students: {
-          id: string
-          firstName: string
-          lastName: string
-          email: string
-          rollNumber: number
-          class: string
-        }[] }>("/api/students")
+        const { data, error } = await api.get<{ students: StudentRow[] }>("/api/students")
 
         if (error) {
           throw new Error(error)
@@ -202,6 +221,32 @@ function TeacherStudents() {
     fetchStudents()
   }, [])
 
+  const loadStudentProgress = async (student: StudentRow) => {
+    const fullName = `${student.firstName} ${student.lastName}`.trim() || "Student"
+    setSelectedStudentName(fullName)
+    setIsProgressDialogOpen(true)
+    setProgressLoading(true)
+    setProgressError("")
+    setSelectedProgress(null)
+    try {
+      const { data, error } = await api.get<{ progress: StudentProgress }>(
+        `/api/marks/teacher/student/${student.id}/progress`
+      )
+      if (error) {
+        throw new Error(error)
+      }
+      if (!data?.progress) {
+        throw new Error("Progress data not found")
+      }
+      setSelectedProgress(data.progress)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load progress"
+      setProgressError(toUiErrorMessage(message, "Failed to load progress"))
+    } finally {
+      setProgressLoading(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -215,11 +260,11 @@ function TeacherStudents() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>First Name</TableHead>
-                <TableHead>Last Name</TableHead>
+                <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Roll Number</TableHead>
                 <TableHead>Class</TableHead>
+                <TableHead className="text-right">Academic Progress</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -246,17 +291,90 @@ function TeacherStudents() {
               )}
               {!loading && !error && studentList.map((student) => (
                 <TableRow key={student.id}>
-                  <TableCell className="font-medium">{student.firstName}</TableCell>
-                  <TableCell>{student.lastName}</TableCell>
+                  <TableCell className="font-medium">{`${student.firstName} ${student.lastName}`.trim() || "-"}</TableCell>
                   <TableCell>{student.email || "-"}</TableCell>
                   <TableCell>{student.rollNumber}</TableCell>
                   <TableCell>{student.class}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => loadStudentProgress(student)}
+                    >
+                      View Progress
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={isProgressDialogOpen} onOpenChange={setIsProgressDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{selectedStudentName} - Academic Progress</DialogTitle>
+            <DialogDescription>
+              Progress for the teacher's assigned subject
+            </DialogDescription>
+          </DialogHeader>
+
+          {progressLoading && (
+            <p className="text-sm text-muted-foreground">Loading progress...</p>
+          )}
+
+          {!progressLoading && progressError && (
+            <p className="text-sm text-destructive">{progressError}</p>
+          )}
+
+          {!progressLoading && !progressError && selectedProgress && (
+            <div className="space-y-4">
+              <div className="rounded-md border p-4">
+                <p className="text-sm text-muted-foreground">Subject</p>
+                <p className="text-base font-semibold text-foreground">
+                  {selectedProgress.subject}
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">CT1</p>
+                  <p className="text-lg font-semibold">{selectedProgress.ct1}/30</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">CT2</p>
+                  <p className="text-lg font-semibold">{selectedProgress.ct2}/30</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="text-lg font-semibold">
+                    {selectedProgress.total}/{selectedProgress.maxTotal}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Overall Progress</span>
+                  <span className="font-medium">
+                    {selectedProgress.percentage}%
+                  </span>
+                </div>
+                <Progress value={selectedProgress.percentage} />
+              </div>
+              {!selectedProgress.hasMarks && (
+                <p className="text-sm text-muted-foreground">
+                  No marks saved yet for this subject.
+                </p>
+              )}
+              {selectedProgress.updatedAt && (
+                <p className="text-xs text-muted-foreground">
+                  Last updated: {new Date(selectedProgress.updatedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
