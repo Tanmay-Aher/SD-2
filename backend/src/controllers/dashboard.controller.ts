@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { Types } from "mongoose";
 import { Attendance } from "../models/Attendance.model";
 import { Assignment, AssignmentSubmission } from "../models/Assignment.model";
 import { Student } from "../models/Student.model";
@@ -69,7 +70,12 @@ export const getStudentOverview = async (req: AuthRequest, res: Response) => {
     }
 
     const [attendanceRecords, submissions] = await Promise.all([
-      Attendance.find({ student: student._id }).select("date status").lean(),
+      Attendance.aggregate([
+        { $match: { "records.student": student._id } },
+        { $unwind: "$records" },
+        { $match: { "records.student": student._id } },
+        { $project: { date: "$date", status: "$records.status" } },
+      ]),
       AssignmentSubmission.find({ student: student._id })
         .select("status assignment")
         .populate("assignment", "subject")
@@ -173,12 +179,20 @@ export const getTeacherOverview = async (req: AuthRequest, res: Response) => {
     const studentIds = matchedStudents.map((student) => student._id);
 
     const [attendanceRecords, teacherAssignments] = await Promise.all([
-      Attendance.find({
-        teacher: req.user.id,
-        ...(studentIds.length > 0 ? { student: { $in: studentIds } } : {}),
-      })
-        .select("student date status")
-        .lean(),
+      Attendance.aggregate([
+        { $match: { teacher: new Types.ObjectId(req.user.id) } },
+        { $unwind: "$records" },
+        ...(studentIds.length > 0
+          ? [{ $match: { "records.student": { $in: studentIds } } }]
+          : []),
+        {
+          $project: {
+            student: "$records.student",
+            date: "$date",
+            status: "$records.status",
+          },
+        },
+      ]),
       Assignment.find({ teacher: req.user.id }).select("_id").lean(),
     ]);
 

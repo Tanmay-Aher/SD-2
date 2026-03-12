@@ -55,13 +55,17 @@ const buildSummary = (records: AttendanceRecord[]): SubjectSummary[] => {
 
 const upsertAttendance = (
   records: AttendanceRecord[],
-  incoming: Partial<AttendanceRecord> & { attendanceId?: string }
+  incoming: Partial<AttendanceRecord> & { attendanceId?: string; studentId?: string }
 ): AttendanceRecord[] => {
   if (!incoming.attendanceId && !incoming._id) {
     return records;
   }
 
-  const id = incoming.attendanceId || incoming._id!;
+  const id = incoming.attendanceId
+    ? incoming.studentId
+      ? `${incoming.attendanceId}:${incoming.studentId}`
+      : incoming.attendanceId
+    : incoming._id!;
   const index = records.findIndex((item) => item._id === id);
   const normalized: AttendanceRecord = {
     _id: id,
@@ -133,6 +137,11 @@ export function StudentAttendancePanel() {
   }, [loadAttendance]);
 
   const summary = React.useMemo(() => buildSummary(records), [records]);
+  const totals = React.useMemo(() => {
+    const total = records.length;
+    const present = records.filter((record) => record.status === "present").length;
+    return { total, present, absent: total - present };
+  }, [records]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -148,6 +157,15 @@ export function StudentAttendancePanel() {
             Live update received at {new Date(lastLiveUpdateAt).toLocaleTimeString("en-IN")}
           </Badge>
         )}
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+          Present: {totals.present}
+        </Badge>
+        <Badge className="bg-red-600 text-white hover:bg-red-600">
+          Absent: {totals.absent}
+        </Badge>
+        <Badge variant="outline">Total: {totals.total}</Badge>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
-  markAttendance,
+  saveAttendance,
+  getAttendanceForDate,
   getMyAttendance,
   getTeacherAttendance,
 } from "../controllers/attendance.controller";
@@ -9,12 +10,20 @@ import { authorize } from "../middleware/role.middleware";
 
 const router = Router();
 
-/* Teacher marks/updates attendance */
+/* Teacher saves/updates attendance (bulk) */
 router.post(
-  "/mark",
+  "/save",
   authenticate,
   authorize("teacher"),
-  markAttendance
+  saveAttendance
+);
+
+/* Teacher fetches attendance for a date */
+router.get(
+  "/teacher/date",
+  authenticate,
+  authorize("teacher"),
+  getAttendanceForDate
 );
 
 /* Teacher views only their own attendance records */

@@ -78,7 +78,7 @@ Frontend will be available at `http://localhost:3000`
 npm run dev:backend
 ```
 
-Backend will be available at `http://localhost:5000`
+Backend will be available at `http://localhost:6000` (unless overridden by `PORT` in `backend/.env`)
 
 ### Building
 
@@ -97,7 +97,7 @@ The frontend and backend can be deployed separately:
 
 ## API Documentation
 
-The backend API is available at `http://localhost:5000/api`
+The backend API is available at `http://localhost:6000/api` (unless overridden by `PORT`)
 
 ### Available Endpoints
 
@@ -119,7 +119,7 @@ Create a `.env` file in the backend folder:
 
 ```
 MONGODB_URI=mongodb://localhost:27017/edudash
-PORT=5000
+PORT=6000
 NODE_ENV=development
 JWT_SECRET=your_jwt_secret_key_here
 JWT_EXPIRE=7d
@@ -137,6 +137,10 @@ Configure any API endpoints in the frontend environment files or constants.
 - 📊 Dashboard with analytics
 - 👥 User management
 - 🎨 Beautiful UI with Tailwind CSS and Shadcn components
+
+## Workflow & Flowcharts
+
+See `docs/PROJECT_WORKFLOW.md` for role workflows and Mermaid flowcharts (architecture, auth routing, real-time attendance updates).
 
 ## Technology Stack
 

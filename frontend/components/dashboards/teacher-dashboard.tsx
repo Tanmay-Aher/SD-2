@@ -346,9 +346,9 @@ function TeacherStudents() {
                   <p className="text-lg font-semibold">{selectedProgress.ct2}/30</p>
                 </div>
                 <div className="rounded-md border p-3">
-                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="text-xs text-muted-foreground">Average</p>
                   <p className="text-lg font-semibold">
-                    {selectedProgress.total}/{selectedProgress.maxTotal}
+                    {(selectedProgress.ct1 + selectedProgress.ct2) / 2}/30
                   </p>
                 </div>
               </div>

@@ -185,6 +185,8 @@ export const getTeacherAssignedSubject = async (
 
     return res.status(200).json({
       subject: subject.name,
+      subjectId: String(subjectId),
+      subjectName: subject.name,
       department: teacher.department,
     });
   } catch (error) {

@@ -25,11 +25,25 @@ export interface AttendanceRecord {
   updatedAt: string;
 }
 
-export interface MarkAttendancePayload {
+export interface AttendanceSessionRecord {
   studentId: string;
-  subject: string;
-  date: string;
   status: AttendanceStatus;
+}
+
+export interface AttendanceSession {
+  _id: string;
+  date: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  records: AttendanceSessionRecord[];
+}
+
+export interface SaveAttendancePayload {
+  date: string;
+  classId: string;
+  subjectId: string;
+  records: AttendanceSessionRecord[];
 }
 
 export const fetchMyAttendance = async (): Promise<AttendanceRecord[]> => {
@@ -52,14 +66,35 @@ export const fetchTeacherAttendance = async (): Promise<AttendanceRecord[]> => {
   return data?.attendance ?? [];
 };
 
-export const markAttendance = async (
-  payload: MarkAttendancePayload
-): Promise<{ message: string; action: "created" | "updated"; attendance: AttendanceRecord }> => {
+export const fetchAttendanceForDate = async (
+  date: string,
+  classId: string,
+  subjectId: string
+): Promise<AttendanceSession | null> => {
+  const params = new URLSearchParams({
+    date,
+    classId,
+    subjectId,
+  });
+  const { data, error } = await api.get<{ attendance: AttendanceSession | null }>(
+    `/api/attendance/teacher/date?${params.toString()}`
+  );
+
+  if (error) {
+    throw new Error(error);
+  }
+
+  return data?.attendance ?? null;
+};
+
+export const saveAttendanceSession = async (
+  payload: SaveAttendancePayload
+): Promise<{ message: string; action: "created" | "updated"; attendance: AttendanceSession }> => {
   const { data, error } = await api.post<{
     message: string;
     action: "created" | "updated";
-    attendance: AttendanceRecord;
-  }>("/api/attendance/mark", payload);
+    attendance: AttendanceSession;
+  }>("/api/attendance/save", payload);
 
   if (error) {
     throw new Error(error);

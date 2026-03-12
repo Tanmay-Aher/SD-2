@@ -201,6 +201,9 @@ function UsersPanel() {
   });
   const [search, setSearch] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState("all");
+  const pageRef = React.useRef(1);
+  const searchRef = React.useRef("");
+  const roleFilterRef = React.useRef("all");
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState({
     firstName: "",
@@ -213,24 +216,27 @@ function UsersPanel() {
     rollNumber: "",
   });
 
-  const load = React.useCallback(
-    async (page = pagination.page) => {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(PAGE_SIZE),
+  const load = React.useCallback(async (page = pageRef.current) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(PAGE_SIZE),
+    });
+    const nextSearch = searchRef.current.trim();
+    const nextRoleFilter = roleFilterRef.current;
+    if (nextSearch) params.set("search", nextSearch);
+    if (nextRoleFilter !== "all") params.set("role", nextRoleFilter);
+    const { data } = await api.get<{ users: AdminUser[]; pagination: Pagination }>(
+      `/api/admin/users?${params.toString()}`
+    );
+    if (data) {
+      setRows(data.users || []);
+      setPagination((prev) => {
+        const next = data.pagination || prev;
+        pageRef.current = next.page;
+        return next;
       });
-      if (search.trim()) params.set("search", search.trim());
-      if (roleFilter !== "all") params.set("role", roleFilter);
-      const { data } = await api.get<{ users: AdminUser[]; pagination: Pagination }>(
-        `/api/admin/users?${params.toString()}`
-      );
-      if (data) {
-        setRows(data.users || []);
-        setPagination(data.pagination || pagination);
-      }
-    },
-    [pagination, roleFilter, search]
-  );
+    }
+  }, []);
 
   React.useEffect(() => {
     load(1);
@@ -287,11 +293,25 @@ function UsersPanel() {
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-full max-w-sm">
           <Label>Search</Label>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or email" />
+          <Input
+            value={search}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSearch(v);
+              searchRef.current = v;
+            }}
+            placeholder="Name or email"
+          />
         </div>
         <div className="w-[200px]">
           <Label>Role</Label>
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <Select
+            value={roleFilter}
+            onValueChange={(v) => {
+              setRoleFilter(v);
+              roleFilterRef.current = v;
+            }}
+          >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All</SelectItem>
@@ -377,17 +397,26 @@ function StudentsPanel() {
   const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
   const [search, setSearch] = React.useState("");
   const [department, setDepartment] = React.useState("");
+  const pageRef = React.useRef(1);
+  const searchRef = React.useRef("");
+  const departmentRef = React.useRef("");
 
-  const load = React.useCallback(async (page = pagination.page) => {
+  const load = React.useCallback(async (page = pageRef.current) => {
     const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
-    if (search.trim()) q.set("search", search.trim());
-    if (department.trim()) q.set("department", department.trim());
+    const nextSearch = searchRef.current.trim();
+    const nextDepartment = departmentRef.current.trim();
+    if (nextSearch) q.set("search", nextSearch);
+    if (nextDepartment) q.set("department", nextDepartment);
     const { data } = await api.get<{ students: StudentRow[]; pagination: Pagination }>(`/api/admin/students?${q.toString()}`);
     if (data) {
       setRows(data.students || []);
-      setPagination(data.pagination || pagination);
+      setPagination((prev) => {
+        const next = data.pagination || prev;
+        pageRef.current = next.page;
+        return next;
+      });
     }
-  }, [department, pagination, search]);
+  }, []);
 
   React.useEffect(() => { load(1); }, [load]);
 
@@ -406,8 +435,26 @@ function StudentsPanel() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3">
-        <Input className="max-w-sm" placeholder="Search students" value={search} onChange={(e) => setSearch(e.target.value)} />
-        <Input className="w-[220px]" placeholder="Filter by department/class" value={department} onChange={(e) => setDepartment(e.target.value)} />
+        <Input
+          className="max-w-sm"
+          placeholder="Search students"
+          value={search}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearch(v);
+            searchRef.current = v;
+          }}
+        />
+        <Input
+          className="w-[220px]"
+          placeholder="Filter by department/class"
+          value={department}
+          onChange={(e) => {
+            const v = e.target.value;
+            setDepartment(v);
+            departmentRef.current = v;
+          }}
+        />
         <Button onClick={() => load(1)}>Apply</Button>
       </div>
       <Card>
@@ -440,23 +487,39 @@ function TeachersPanel() {
   const [rows, setRows] = React.useState<AdminUser[]>([]);
   const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
   const [search, setSearch] = React.useState("");
+  const pageRef = React.useRef(1);
+  const searchRef = React.useRef("");
 
-  const load = React.useCallback(async (page = pagination.page) => {
+  const load = React.useCallback(async (page = pageRef.current) => {
     const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE), role: "teacher" });
-    if (search.trim()) q.set("search", search.trim());
+    const nextSearch = searchRef.current.trim();
+    if (nextSearch) q.set("search", nextSearch);
     const { data } = await api.get<{ users: AdminUser[]; pagination: Pagination }>(`/api/admin/users?${q.toString()}`);
     if (data) {
       setRows(data.users || []);
-      setPagination(data.pagination || pagination);
+      setPagination((prev) => {
+        const next = data.pagination || prev;
+        pageRef.current = next.page;
+        return next;
+      });
     }
-  }, [pagination, search]);
+  }, []);
 
   React.useEffect(() => { load(1); }, [load]);
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <Input className="max-w-sm" placeholder="Search teachers" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input
+          className="max-w-sm"
+          placeholder="Search teachers"
+          value={search}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearch(v);
+            searchRef.current = v;
+          }}
+        />
         <Button onClick={() => load(1)}>Apply</Button>
       </div>
       <Card>
@@ -489,19 +552,26 @@ function SubjectsPanel() {
   const [rows, setRows] = React.useState<any[]>([]);
   const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
   const [search, setSearch] = React.useState("");
+  const pageRef = React.useRef(1);
+  const searchRef = React.useRef("");
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [department, setDepartment] = React.useState("");
   const [teacherUserId, setTeacherUserId] = React.useState("");
 
-  const load = React.useCallback(async (page = pagination.page) => {
+  const load = React.useCallback(async (page = pageRef.current) => {
     const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
-    if (search.trim()) q.set("search", search.trim());
+    const nextSearch = searchRef.current.trim();
+    if (nextSearch) q.set("search", nextSearch);
     const { data } = await api.get<any>(`/api/admin/subjects?${q.toString()}`);
     if (!data) return;
     setRows(data.subjects || []);
-    setPagination(data.pagination || pagination);
-  }, [pagination, search]);
+    setPagination((prev) => {
+      const next = data.pagination || prev;
+      pageRef.current = next.page;
+      return next;
+    });
+  }, []);
 
   React.useEffect(() => { load(1); }, [load]);
 
@@ -521,7 +591,16 @@ function SubjectsPanel() {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <Input className="max-w-sm" placeholder="Search subjects" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input
+          className="max-w-sm"
+          placeholder="Search subjects"
+          value={search}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearch(v);
+            searchRef.current = v;
+          }}
+        />
         <Button onClick={() => load(1)}>Apply</Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild><Button className="ml-auto"><Plus className="mr-2 h-4 w-4" />Create Subject</Button></DialogTrigger>
@@ -570,22 +649,38 @@ function AssignmentsPanel() {
   const [rows, setRows] = React.useState<any[]>([]);
   const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
   const [search, setSearch] = React.useState("");
+  const pageRef = React.useRef(1);
+  const searchRef = React.useRef("");
 
-  const load = React.useCallback(async (page = pagination.page) => {
+  const load = React.useCallback(async (page = pageRef.current) => {
     const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
-    if (search.trim()) q.set("search", search.trim());
+    const nextSearch = searchRef.current.trim();
+    if (nextSearch) q.set("search", nextSearch);
     const { data } = await api.get<any>(`/api/admin/assignments?${q.toString()}`);
     if (!data) return;
     setRows(data.assignments || []);
-    setPagination(data.pagination || pagination);
-  }, [pagination, search]);
+    setPagination((prev) => {
+      const next = data.pagination || prev;
+      pageRef.current = next.page;
+      return next;
+    });
+  }, []);
 
   React.useEffect(() => { load(1); }, [load]);
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <Input className="max-w-sm" placeholder="Search assignments" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input
+          className="max-w-sm"
+          placeholder="Search assignments"
+          value={search}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearch(v);
+            searchRef.current = v;
+          }}
+        />
         <Button onClick={() => load(1)}>Apply</Button>
       </div>
       <Card>
@@ -618,22 +713,38 @@ function AnnouncementsPanel() {
   const [rows, setRows] = React.useState<any[]>([]);
   const [pagination, setPagination] = React.useState<Pagination>({ page: 1, limit: PAGE_SIZE, total: 0, totalPages: 1 });
   const [search, setSearch] = React.useState("");
+  const pageRef = React.useRef(1);
+  const searchRef = React.useRef("");
 
-  const load = React.useCallback(async (page = pagination.page) => {
+  const load = React.useCallback(async (page = pageRef.current) => {
     const q = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
-    if (search.trim()) q.set("search", search.trim());
+    const nextSearch = searchRef.current.trim();
+    if (nextSearch) q.set("search", nextSearch);
     const { data } = await api.get<any>(`/api/admin/announcements?${q.toString()}`);
     if (!data) return;
     setRows(data.announcements || []);
-    setPagination(data.pagination || pagination);
-  }, [pagination, search]);
+    setPagination((prev) => {
+      const next = data.pagination || prev;
+      pageRef.current = next.page;
+      return next;
+    });
+  }, []);
 
   React.useEffect(() => { load(1); }, [load]);
 
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <Input className="max-w-sm" placeholder="Search announcements" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input
+          className="max-w-sm"
+          placeholder="Search announcements"
+          value={search}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearch(v);
+            searchRef.current = v;
+          }}
+        />
         <Button onClick={() => load(1)}>Apply</Button>
       </div>
       <Card>
@@ -671,24 +782,108 @@ function AnnouncementsPanel() {
 function AttendanceReportsPanel() {
   const [summary, setSummary] = React.useState({ totalStudents: 0, attendancePercentage: 0 });
   const [perClass, setPerClass] = React.useState<Array<{ class: string; attendancePercentage: number }>>([]);
-  const [perStudent, setPerStudent] = React.useState<Array<{ studentId: string; fullName: string; class: string; attendancePercentage: number }>>([]);
+  const [perStudent, setPerStudent] = React.useState<Array<{
+    studentId: string;
+    fullName: string;
+    class: string;
+    attendancePercentage: number;
+    totalClasses: number;
+    presentClasses: number;
+  }>>([]);
+  const [filters, setFilters] = React.useState({
+    className: "",
+    studentId: "",
+    date: "",
+  });
+
+  const loadReport = React.useCallback(async () => {
+    const params = new URLSearchParams();
+    if (filters.className.trim()) params.set("class", filters.className.trim());
+    if (filters.studentId.trim()) params.set("studentId", filters.studentId.trim());
+    if (filters.date) params.set("date", filters.date);
+
+    const { data } = await api.get<any>(
+      `/api/admin/attendance/report${params.toString() ? `?${params}` : ""}`
+    );
+    if (!data) return;
+    setSummary({
+      totalStudents: data.summary?.totalStudents || 0,
+      attendancePercentage: data.summary?.attendancePercentage || 0,
+    });
+    setPerClass(data.perClass || []);
+    setPerStudent(data.perStudent || []);
+  }, [filters]);
 
   React.useEffect(() => {
-    const run = async () => {
-      const { data } = await api.get<any>("/api/admin/attendance/report");
-      if (!data) return;
-      setSummary({
-        totalStudents: data.summary?.totalStudents || 0,
-        attendancePercentage: data.summary?.attendancePercentage || 0,
-      });
-      setPerClass(data.perClass || []);
-      setPerStudent((data.perStudent || []).slice(0, 20));
-    };
-    run();
-  }, []);
+    loadReport();
+  }, [loadReport]);
+
+  const exportCsv = () => {
+    const headers = ["Name", "Class", "Present", "Total", "Attendance %"];
+    const rows = perStudent.map((row) => [
+      row.fullName,
+      row.class,
+      String(row.presentClasses ?? 0),
+      String(row.totalClasses ?? 0),
+      String(row.attendancePercentage ?? 0),
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((line) => line.map((value) => `"${value.replace(/\"/g, '\"\"')}"`).join(","))
+      .join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "attendance-report.csv");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle>Filters</CardTitle></CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          <div className="flex flex-col gap-2">
+            <Label>Class</Label>
+            <Input
+              placeholder="e.g. FYBSc"
+              value={filters.className}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, className: event.target.value }))
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>Student ID</Label>
+            <Input
+              placeholder="Student ObjectId"
+              value={filters.studentId}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, studentId: event.target.value }))
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>Date</Label>
+            <Input
+              type="date"
+              value={filters.date}
+              onChange={(event) =>
+                setFilters((prev) => ({ ...prev, date: event.target.value }))
+              }
+            />
+          </div>
+          <div className="flex items-end gap-2">
+            <Button onClick={loadReport}>Apply</Button>
+            <Button variant="outline" onClick={exportCsv}>Export CSV</Button>
+          </div>
+        </CardContent>
+      </Card>
       <div className="grid gap-4 md:grid-cols-2">
         <StatCard title="Students in Report" value={summary.totalStudents} icon={Users} />
         <StatCard title="Overall Attendance" value={`${summary.attendancePercentage}%`} icon={CircleCheckBig} />
@@ -711,12 +906,22 @@ function AttendanceReportsPanel() {
         <CardHeader><CardTitle>Per Student Attendance</CardTitle></CardHeader>
         <CardContent className="p-0">
           <Table>
-            <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead>Attendance %</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Class</TableHead>
+                <TableHead>Present</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Attendance %</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
               {perStudent.map((row) => (
                 <TableRow key={row.studentId}>
                   <TableCell>{row.fullName}</TableCell>
                   <TableCell>{row.class}</TableCell>
+                  <TableCell>{row.presentClasses}</TableCell>
+                  <TableCell>{row.totalClasses}</TableCell>
                   <TableCell>{row.attendancePercentage}%</TableCell>
                 </TableRow>
               ))}

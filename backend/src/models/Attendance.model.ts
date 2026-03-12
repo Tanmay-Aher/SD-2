@@ -1,34 +1,26 @@
-import mongoose, { Document, Schema } from "mongoose";
+import mongoose, { Document, Schema, Types } from "mongoose";
+
+export interface IAttendanceRecord {
+  student: Types.ObjectId;
+  status: "present" | "absent";
+}
 
 export interface IAttendance extends Document {
-  student: mongoose.Types.ObjectId;
-  teacher: mongoose.Types.ObjectId;
-  subject: string;
   date: Date;
-  status: "present" | "absent";
+  classId: string;
+  subjectId: Types.ObjectId;
+  subjectName: string;
+  teacher: Types.ObjectId;
+  records: IAttendanceRecord[];
   createdAt: Date;
   updatedAt: Date;
 }
 
-const attendanceSchema = new Schema<IAttendance>(
+const attendanceRecordSchema = new Schema<IAttendanceRecord>(
   {
     student: {
       type: Schema.Types.ObjectId,
       ref: "Student",
-      required: true,
-    },
-    teacher: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    subject: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    date: {
-      type: Date,
       required: true,
     },
     status: {
@@ -37,15 +29,51 @@ const attendanceSchema = new Schema<IAttendance>(
       required: true,
     },
   },
+  { _id: false }
+);
+
+const attendanceSchema = new Schema<IAttendance>(
+  {
+    date: {
+      type: Date,
+      required: true,
+    },
+    classId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    subjectId: {
+      type: Schema.Types.ObjectId,
+      ref: "Subject",
+      required: true,
+    },
+    subjectName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    teacher: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    records: {
+      type: [attendanceRecordSchema],
+      default: [],
+    },
+  },
   { timestamps: true }
 );
 
 attendanceSchema.index(
-  { student: 1, subject: 1, date: 1 },
-  { unique: true, name: "attendance_student_subject_date_unique" }
+  { date: 1, classId: 1, subjectId: 1, teacher: 1 },
+  { unique: true, name: "attendance_date_class_subject_teacher_unique" }
 );
 
-export const Attendance = mongoose.model<IAttendance>(
-  "Attendance",
-  attendanceSchema
+attendanceSchema.index(
+  { "records.student": 1 },
+  { name: "attendance_records_student_idx" }
 );
+
+export const Attendance = mongoose.model<IAttendance>("Attendance", attendanceSchema);

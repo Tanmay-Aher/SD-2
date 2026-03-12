@@ -45,6 +45,7 @@ const removeTeacherData = async (userId: Types.ObjectId | string) => {
     { teachers: teacher._id },
     { $pull: { teachers: teacher._id } }
   );
+  await Attendance.deleteMany({ teacher: userId });
   await Teacher.findByIdAndDelete(teacher._id);
 };
 
@@ -53,10 +54,15 @@ const removeStudentData = async (userId: Types.ObjectId | string) => {
   if (!student) return;
 
   await Promise.all([
-    Attendance.deleteMany({ student: student._id }),
+    Attendance.updateMany(
+      { "records.student": student._id },
+      { $pull: { records: { student: student._id } } }
+    ),
     AssignmentSubmission.deleteMany({ student: student._id }),
     Student.findByIdAndDelete(student._id),
   ]);
+
+  await Attendance.deleteMany({ records: { $size: 0 } });
 };
 
 export const getAdminOverview = async (_req: Request, res: Response) => {
@@ -66,16 +72,30 @@ export const getAdminOverview = async (_req: Request, res: Response) => {
       totalTeachers,
       totalAssignments,
       totalAnnouncements,
-      totalAttendance,
-      presentAttendance,
+      attendanceStats,
     ] = await Promise.all([
       Student.countDocuments(),
       Teacher.countDocuments(),
       Assignment.countDocuments(),
       Announcement.countDocuments(),
-      Attendance.countDocuments(),
-      Attendance.countDocuments({ status: "present" }),
+      Attendance.aggregate([
+        { $unwind: "$records" },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            present: {
+              $sum: {
+                $cond: [{ $eq: ["$records.status", "present"] }, 1, 0],
+              },
+            },
+          },
+        },
+      ]),
     ]);
+
+    const totalAttendance = Number(attendanceStats?.[0]?.total || 0);
+    const presentAttendance = Number(attendanceStats?.[0]?.present || 0);
 
     const attendanceAverage =
       totalAttendance > 0 ? round((presentAttendance / totalAttendance) * 100) : 0;
@@ -728,11 +748,16 @@ export const deleteStudentAdmin = async (req: Request, res: Response) => {
     }
 
     await Promise.all([
-      Attendance.deleteMany({ student: student._id }),
+      Attendance.updateMany(
+        { "records.student": student._id },
+        { $pull: { records: { student: student._id } } }
+      ),
       AssignmentSubmission.deleteMany({ student: student._id }),
       Student.findByIdAndDelete(student._id),
       User.findByIdAndDelete(student.user),
     ]);
+
+    await Attendance.deleteMany({ records: { $size: 0 } });
 
     return res.status(200).json({ message: "Student deleted successfully" });
   } catch (error) {
@@ -931,24 +956,57 @@ export const deleteAnnouncementAdmin = async (req: Request, res: Response) => {
   }
 };
 
-export const getAttendanceReportAdmin = async (_req: Request, res: Response) => {
+export const getAttendanceReportAdmin = async (req: Request, res: Response) => {
   try {
-    const students = await Student.find()
+    const { class: className, studentId, date } = req.query as {
+      class?: string;
+      studentId?: string;
+      date?: string;
+    };
+
+    const attendanceMatch: Record<string, unknown> = {};
+    const studentFilter: Record<string, unknown> = {};
+
+    if (className?.trim()) {
+      const trimmed = className.trim();
+      attendanceMatch.classId = trimmed;
+      studentFilter.class = trimmed;
+    }
+
+    if (studentId) {
+      if (!isObjectId(studentId)) {
+        return res.status(400).json({ message: "Invalid student id" });
+      }
+      studentFilter._id = new Types.ObjectId(studentId);
+    }
+
+    if (date) {
+      const normalized = new Date(date);
+      normalized.setUTCHours(0, 0, 0, 0);
+      attendanceMatch.date = normalized;
+    }
+
+    const students = await Student.find(studentFilter)
       .populate("user", "email")
       .select("firstName lastName rollNumber class")
       .lean();
 
     const studentIds = students.map((student: any) => student._id);
+
     const attendanceAgg =
       studentIds.length > 0
         ? await Attendance.aggregate([
-            { $match: { student: { $in: studentIds } } },
+            { $match: attendanceMatch },
+            { $unwind: "$records" },
+            { $match: { "records.student": { $in: studentIds } } },
             {
               $group: {
-                _id: "$student",
+                _id: "$records.student",
                 total: { $sum: 1 },
                 present: {
-                  $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] },
+                  $sum: {
+                    $cond: [{ $eq: ["$records.status", "present"] }, 1, 0],
+                  },
                 },
               },
             },
